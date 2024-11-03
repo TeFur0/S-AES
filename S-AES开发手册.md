@@ -317,7 +317,7 @@ function doubleEncrypt() {
         document.getElementById('double-output').innerHTML = `<strong>密文:</strong> ${ciphertextStr}`;
     }
 ```
-####三重加密函数
+#### 三重加密函数
 ```
 function tripleEncrypt() {
         let plaintextStr = document.getElementById('triple-plaintext').value.trim();
