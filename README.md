@@ -30,12 +30,11 @@ s_aes.html
 ## **功能测试与运行界面**
 
 * **基础界面**
-![基础界面](https://github.com/TeFur0/S-DES/blob/main/png/基础界面.png?raw=true)
+![基础界面](https://github.com/TeFur0/S-AES/blob/main/png/基础界面.png?raw=true)
 
 * **基本测试**
 
 根据S-AES算法编写和调试程序，提供GUI解密支持用户交互。输入可以是16bit的数据和16bit的密钥，输出是16bit的密文。
-![交叉f](https://github.com/TeFur0/S-DES/blob/main/png/交叉f.png?raw=true)
 
 * **交叉测试**
 
