@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>S-AES 加密与解密实现</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        .container {
+            background-color: #fff;
+            padding: 25px;
+            border-radius: 5px;
+            max-width: 900px;
+            margin: auto;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        select {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 12px 20px;
+            background-color: #28a745;
+            border: none;
+            color: #fff;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+        .output {
+            margin-top: 25px;
+            background-color: #e9ecef;
+            padding: 20px;
+            border-radius: 5px;
+            word-wrap: break-word;
+        }
+        .output strong {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+        .matrix {
+            display: inline-block;
+            margin: 5px 0;
+        }
+        .matrix div {
+            display: flex;
+        }
+        .matrix span {
+            display: inline-block;
+            width: 30px;
+            text-align: center;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>S-AES 加密与解密实现</h1>
+        <div class="input-group">
+            <label for="mode">模式选择：</label>
+            <select id="mode">
+                <option value="encrypt">加密</option>
+                <option value="decrypt">解密</option>
+                <option value="attack">中间相遇攻击</option>
+            </select>
+        </div>
+        <div id="operationSection">
+            <div class="input-group">
+                <label for="operation">操作类型：</label>
+                <select id="operation">
+                    <option value="single">单重加密/解密</option>
+                    <option value="double">双重加密/解密</option>
+                    <option value="triple">三重加密/解密</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="inputText">输入内容 (16 位2进制):</label>
+                <input type="text" id="inputText" placeholder="例如: 0101010101010101">
+            </div>
+            <div class="input-group" id="keyInputs">
+                <label>密钥输入 (每个密钥为16位2进制):</label>
+                <input type="text" id="key1" placeholder="密钥 K1 (例如: 1010101111001010)">
+                <input type="text" id="key2" placeholder="密钥 K2 (仅在双重和三重加密中需要)">
+                <input type="text" id="key3" placeholder="密钥 K3 (仅在三重加密中需要)">
+            </div>
+        </div>
+        <div id="attackSection" class="hidden">
+            <div class="input-group">
+                <label>明文和密文对 (每对16位2进制，每行一对，格式: 明文 密文):</label>
+                <textarea id="pairs" rows="4" placeholder="例如:
+                0101010101010101 1010101111001010"></textarea>
+            </div>
+        </div>
+        <button onclick="process()">执行</button>
+        <div class="error" id="error"></div>
+        <div class="output" id="output">
+            <strong>输出:</strong> <span id="result">-</span>
+        </div>
+    </div>
+
+    <script>
+        // S-Box 和逆 S-Box
+        const S_BOX = [
+            [0x9, 0x4, 0xA, 0xB],
+            [0xD, 0x1, 0x8, 0x5],
+            [0x6, 0x2, 0x0, 0x3],
+            [0xC, 0xE, 0xF, 0x7]
+        ];
+
+        const INV_S_BOX = [
+            [0xA, 0x5, 0x9, 0xB],
+            [0x1, 0x7, 0x8, 0xF],
+            [0x6, 0x0, 0x2, 0x3],
+            [0xC, 0x4, 0xD, 0xE]
+        ];
+
+        // 列混淆矩阵和逆列混淆矩阵
+        const MIX_COL_MATRIX = [
+            [1, 4],
+            [4, 1]
+        ];
+
+        const INV_MIX_COL_MATRIX = [
+            [9, 2],
+            [2, 9]
+        ];
+
+        // Galois乘法
+        function galoisMultiply(a, b) {
+            let p = 0;
+            let hiBitSet;
+            for (let i = 0; i < 4; i++) {
+                if ((b & 1) === 1) {
+                    p ^= a;
+                }
+                hiBitSet = (a & 0x8);
+                a <<= 1;
+                if (hiBitSet) {
+                    a ^= 0x13; // 0x13 是 x^4 + x + 1
+                }
+                b >>= 1;
+            }
+            return p & 0xF;
+        }
+
+        // SubBytes
+        function subBytes(state, sBox) {
+            let newState = [];
+            for (let i = 0; i < state.length; i++) {
+                let row = (state[i] & 0xC) >> 2;
+                let col = state[i] & 0x3;
+                newState.push(sBox[row][col]);
+            }
+            return newState;
+        }
+
+        // ShiftRows
+        function shiftRows(state) {
+            // 对于2x2矩阵，行移位仅第二行左移1
+            return [state[0], state[3], state[2], state[1]];
+        }
+
+        // Inv ShiftRows
+        function invShiftRows(state) {
+            return [state[0], state[3], state[2], state[1]];
+        }
+
+        // MixColumns
+        function mixColumns(state, matrix) {
+            let a = [state[0], state[1], state[2], state[3]];
+            let b = [];
+            b[0] = galoisMultiply(a[0], matrix[0][0]) ^ galoisMultiply(a[1], matrix[0][1]);
+            b[1] = galoisMultiply(a[0], matrix[1][0]) ^ galoisMultiply(a[1], matrix[1][1]);
+            b[2] = galoisMultiply(a[2], matrix[0][0]) ^ galoisMultiply(a[3], matrix[0][1]);
+            b[3] = galoisMultiply(a[2], matrix[1][0]) ^ galoisMultiply(a[3], matrix[1][1]);
+            return b;
+        }
+
+        // AddRoundKey
+        function addRoundKey(state, key) {
+            return state.map((byte, idx) => byte ^ key[idx]);
+        }
+
+        // Key Expansion
+        function keyExpansion(key) {
+            // 对于 S-AES，密钥扩展生成两个子密钥
+            let k0 = key.slice(0, 4);
+            let k1 = [];
+
+            // 轮常数
+            const Rcon = [0x9, 0xB, 0xD, 0xE]; // 示例轮常数
+
+            // 简单的密钥扩展示例，实际设计可能更复杂
+            // 生成 k1
+            // 先将k0的后两个半字节左移
+            let temp = [k0[2], k0[3], k0[0], k0[1]];
+            // 通过S_BOX
+            temp = subBytes(temp, S_BOX);
+            // 异或轮常数
+            temp = temp.map((byte, idx) => byte ^ Rcon[idx]);
+            // 异或k0
+            for (let i = 0; i < 4; i++) {
+                k1[i] = temp[i] ^ k0[i];
+            }
+
+            return [k0, k1];
+        }
+
+        // 将16进制字符串转换为半字节数组
+        function hexToNibbles(hex) {
+            hex = hex.toUpperCase();
+            let nibbles = [];
+            for (let i = 0; i < hex.length; i++) {
+                let val = parseInt(hex[i], 16);
+                if (isNaN(val)) {
+                    throw new Error("无效的16进制字符");
+                }
+                nibbles.push(val);
+            }
+            return nibbles;
+        }
+
+        // 将半字节数组转换为16进制字符串
+        function nibblesToHex(nibbles) {
+            return nibbles.map(n => n.toString(16).toUpperCase()).join('');
+        }
+
+        // 加密过程
+        function encrypt(plaintext, keys) {
+            let state = addRoundKey(plaintext, keys[0]);
+
+            for (let i = 1; i < keys.length - 1; i++) {
+                state = subBytes(state, S_BOX);
+                state = shiftRows(state);
+                state = mixColumns(state, MIX_COL_MATRIX);
+                state = addRoundKey(state, keys[i]);
+            }
+
+            // 最后一轮不进行 MixColumns
+            state = subBytes(state, S_BOX);
+            state = shiftRows(state);
+            state = addRoundKey(state, keys[keys.length - 1]);
+
+            return state;
+        }
+
+        // 解密过程
+        function decrypt(ciphertext, keys) {
+            let state = addRoundKey(ciphertext, keys[keys.length - 1]);
+
+            for (let i = keys.length - 2; i > 0; i--) {
+                state = invShiftRows(state);
+                state = subBytes(state, INV_S_BOX);
+                state = addRoundKey(state, keys[i]);
+                state = mixColumns(state, INV_MIX_COL_MATRIX);
+            }
+
+            // 最后一轮不进行逆 MixColumns
+            state = invShiftRows(state);
+            state = subBytes(state, INV_S_BOX);
+            state = addRoundKey(state, keys[0]);
+
+            return state;
+        }
+
+        // 生成所有子密钥
+        function generateAllSubkeys(masterKeys) {
+            let allSubkeys = [];
+            for (let key of masterKeys) {
+                let subkeys = keyExpansion(key);
+                allSubkeys.push(...subkeys);
+            }
+            return allSubkeys;
+        }
+
+        // 中间相遇攻击
+        function meetInTheMiddleAttack(pairs) {
+            // 使用第一个明文-密文对进行攻击
+            let P = pairs[0].plaintext;
+            let C = pairs[0].ciphertext;
+
+            let encryptMap = new Map();
+
+            // 枚举所有可能的 K1
+            for (let k1 = 0; k1 < 65536; k1++) {
+                let key1Hex = k1.toString(16).padStart(4, '0').toUpperCase();
+                let key1 = hexToNibbles(key1Hex);
+                let keys1 = keyExpansion(key1);
+                let encrypted = encrypt(P, keys1);
+                let encryptedHex = nibblesToHex(encrypted);
+                encryptMap.set(encryptedHex, key1Hex);
+            }
+
+            let possibleKeys = [];
+
+            // 枚举所有可能的 K2
+            for (let k2 = 0; k2 < 65536; k2++) {
+                let key2Hex = k2.toString(16).padStart(4, '0').toUpperCase();
+                let key2 = hexToNibbles(key2Hex);
+                let keys2 = keyExpansion(key2);
+                let decrypted = decrypt(C, keys2);
+                let decryptedHex = nibblesToHex(decrypted);
+                if (encryptMap.has(decryptedHex)) {
+                    let key1Hex = encryptMap.get(decryptedHex);
+                    possibleKeys.push({ K1: key1Hex, K2: key2Hex });
+                }
+            }
+
+            // 如果有多个明文-密文对，可以进一步筛选
+            for (let i = 1; i < pairs.length; i++) {
+                let currentPairs = [];
+                for (let pair of possibleKeys) {
+                    let key1 = hexToNibbles(pair.K1);
+                    let key2 = hexToNibbles(pair.K2);
+                    let keys1 = keyExpansion(key1);
+                    let keys2 = keyExpansion(key2);
+                    let intermediate = encrypt(P, keys1);
+                    let finalCipher = encrypt(intermediate, keys2);
+                    if (nibblesToHex(finalCipher) === nibblesToHex(pairs[i].ciphertext)) {
+                        currentPairs.push(pair);
+                    }
+                }
+                possibleKeys = currentPairs;
+                if (possibleKeys.length === 0) break;
+            }
+
+            return possibleKeys;
+        }
+
+      // 处理过程
+function process() {
+    document.getElementById('error').innerText = '';
+    try {
+        let mode = document.getElementById('mode').value;
+        let result;
+        if (mode === "encrypt" || mode === "decrypt") {
+            let operation = document.getElementById('operation').value;
+            let inputText = document.getElementById('inputText').value.trim();
+            let key1Binary = document.getElementById('key1').value.trim();
+            let key2Binary = document.getElementById('key2').value.trim();
+            let key3Binary = document.getElementById('key3').value.trim();
+
+            // 校验输入长度和格式
+            if (!/^[01]{16}$/.test(inputText)) {
+                throw new Error("输入内容必须是16位二进制数据（例如：0101010101010101）");
+            }
+
+            // 解析输入
+            let input = Array.from(inputText.match(/.{1,4}/g)).map(bin => parseInt(bin, 2));
+
+            // 解析密钥
+            let masterKeys = [];
+            if (operation === "single") {
+                if (!/^[01]{16}$/.test(key1Binary)) {
+                    throw new Error("单重加密/解密需要一个16位二进制密钥");
+                }
+                masterKeys.push(Array.from(key1Binary.match(/.{1,4}/g)).map(bin => parseInt(bin, 2)));
+            } else if (operation === "double") {
+                if (!/^[01]{16}$/.test(key1Binary) || !/^[01]{16}$/.test(key2Binary)) {
+                    throw new Error("双重加密/解密需要两个16位二进制密钥");
+                }
+                masterKeys.push(Array.from(key1Binary.match(/.{1,4}/g)).map(bin => parseInt(bin, 2)));
+                masterKeys.push(Array.from(key2Binary.match(/.{1,4}/g)).map(bin => parseInt(bin, 2)));
+            } else if (operation === "triple") {
+                if (!/^[01]{16}$/.test(key1Binary) || !/^[01]{16}$/.test(key2Binary) || !/^[01]{16}$/.test(key3Binary)) {
+                    throw new Error("三重加密/解密需要三个16位二进制密钥");
+                }
+                masterKeys.push(Array.from(key1Binary.match(/.{1,4}/g)).map(bin => parseInt(bin, 2)));
+                masterKeys.push(Array.from(key2Binary.match(/.{1,4}/g)).map(bin => parseInt(bin, 2)));
+                masterKeys.push(Array.from(key3Binary.match(/.{1,4}/g)).map(bin => parseInt(bin, 2)));
+            } else {
+                throw new Error("未知的操作类型");
+            }
+
+            // 生成所有子密钥
+            let allSubkeys = generateAllSubkeys(masterKeys);
+
+            if (mode === "encrypt") {
+                // 根据加密层数进行多重加密
+                if (operation === "single") {
+                    let keys = keyExpansion(masterKeys[0]);
+                    result = encrypt(input, keys);
+                } else if (operation === "double") {
+                    let keys1 = keyExpansion(masterKeys[0]);
+                    let intermediate = encrypt(input, keys1);
+                    let keys2 = keyExpansion(masterKeys[1]);
+                    result = encrypt(intermediate, keys2);
+                } else if (operation === "triple") {
+                    let keys1 = keyExpansion(masterKeys[0]);
+                    let intermediate1 = encrypt(input, keys1);
+                    let keys2 = keyExpansion(masterKeys[1]);
+                    let intermediate2 = encrypt(intermediate1, keys2);
+                    let keys3 = keyExpansion(masterKeys[2]);
+                    result = encrypt(intermediate2, keys3);
+                }
+            } else if (mode === "decrypt") {
+                // 根据加密层数进行多重解密
+                if (operation === "single") {
+                    let keys = keyExpansion(masterKeys[0]);
+                    result = decrypt(input, keys);
+                } else if (operation === "double") {
+                    let keys2 = keyExpansion(masterKeys[1]);
+                    let intermediate = decrypt(input, keys2);
+                    let keys1 = keyExpansion(masterKeys[0]);
+                    result = decrypt(intermediate, keys1);
+                } else if (operation === "triple") {
+                    let keys3 = keyExpansion(masterKeys[2]);
+                    let intermediate1 = decrypt(input, keys3);
+                    let keys2 = keyExpansion(masterKeys[1]);
+                    let intermediate2 = decrypt(intermediate1, keys2);
+                    let keys1 = keyExpansion(masterKeys[0]);
+                    result = decrypt(intermediate2, keys1);
+                }
+            } else {
+                throw new Error("未知的模式选择");
+            }
+
+            // 将结果转换为16位二进制
+            let outputBinary = result.map(nibble => nibble.toString(2).padStart(4, '0')).join('');
+            document.getElementById('result').innerText = outputBinary;
+        } else if (mode === "attack") {
+            // 中间相遇攻击
+            let pairsText = document.getElementById('pairs').value.trim();
+            if (pairsText.length === 0) {
+                throw new Error("请至少输入一对明文和密文");
+            }
+            let lines = pairsText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            let pairs = [];
+            for (let line of lines) {
+                let parts = line.split(/\s+/);
+                if (parts.length !== 2) {
+                    throw new Error("每对明文和密文必须用空格分隔");
+                }
+                if (!/^[01]{16}$/.test(parts[0]) || !/^[01]{16}$/.test(parts[1])) {
+                    throw new Error("明文和密文必须是16位二进制字符");
+                }
+                let plaintext = Array.from(parts[0].match(/.{1,4}/g)).map(bin => parseInt(bin, 2));
+                let ciphertext = Array.from(parts[1].match(/.{1,4}/g)).map(bin => parseInt(bin, 2));
+                pairs.push({ plaintext, ciphertext });
+            }
+
+            // 执行中间相遇攻击
+            let possibleKeys = meetInTheMiddleAttack(pairs);
+
+            if (possibleKeys.length === 0) {
+                result = "未找到匹配的密钥对";
+            } else {
+                result = possibleKeys.map(pair => `K1: ${pair.K1}, K2: ${pair.K2}`).join('<br>');
+            }
+
+            document.getElementById('result').innerHTML = result;
+        }
+    } catch (error) {
+        document.getElementById('error').innerText = "错误: " + error.message;
+        document.getElementById('result').innerText = "-";
+    }
+}
+
+
+        // 动态显示或隐藏密钥输入框和攻击输入框
+        document.getElementById('mode').addEventListener('change', function() {
+            let mode = this.value;
+            if (mode === "attack") {
+                document.getElementById('operationSection').classList.add('hidden');
+                document.getElementById('attackSection').classList.remove('hidden');
+            } else {
+                document.getElementById('operationSection').classList.remove('hidden');
+                document.getElementById('attackSection').classList.add('hidden');
+            }
+        });
+
+        // 初始化密钥输入框和攻击输入框状态
+        window.onload = function() {
+            let mode = document.getElementById('mode').value;
+            if (mode === "attack") {
+                document.getElementById('operationSection').classList.add('hidden');
+                document.getElementById('attackSection').classList.remove('hidden');
+            } else {
+                document.getElementById('operationSection').classList.remove('hidden');
+                document.getElementById('attackSection').classList.add('hidden');
+                // 初始化密钥输入框状态
+                let operation = document.getElementById('operation').value;
+                if (operation === "single") {
+                    document.getElementById('key2').style.display = 'none';
+                    document.getElementById('key3').style.display = 'none';
+                } else if (operation === "double") {
+                    document.getElementById('key2').style.display = 'block';
+                    document.getElementById('key3').style.display = 'none';
+                } else if (operation === "triple") {
+                    document.getElementById('key2').style.display = 'block';
+                    document.getElementById('key3').style.display = 'block';
+                }
+            }
+        };
+
+        // 动态显示或隐藏密钥输入框
+        document.getElementById('operation').addEventListener('change', function() {
+            let operation = this.value;
+            if (operation === "single") {
+                document.getElementById('key2').style.display = 'none';
+                document.getElementById('key3').style.display = 'none';
+            } else if (operation === "double") {
+                document.getElementById('key2').style.display = 'block';
+                document.getElementById('key3').style.display = 'none';
+            } else if (operation === "triple") {
+                document.getElementById('key2').style.display = 'block';
+                document.getElementById('key3').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
