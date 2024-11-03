@@ -24,7 +24,9 @@
 
 ## **运行程序**
 ```bash
-s_aes.html
+index.html
+
+cbc&attack.html
 ```
 
 ## **功能测试与运行界面**
