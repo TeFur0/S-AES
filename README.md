@@ -30,11 +30,13 @@ s_aes.html
 ## **功能测试与运行界面**
 
 * **基础界面**
+
 ![基础界面](https://github.com/TeFur0/S-AES/blob/main/png/基础界面.png?raw=true)
 
 * **基本测试**
 
 根据S-AES算法编写和调试程序，提供GUI解密支持用户交互。输入可以是16bit的数据和16bit的密钥，输出是16bit的密文。
+
 ![基本测试](https://github.com/TeFur0/S-AES/blob/main/png/基本测试.png?raw=true)
 
 * **交叉测试**
@@ -44,14 +46,24 @@ s_aes.html
 
 我组：
 
+![我组](https://github.com/TeFur0/S-AES/blob/main/png/我组.png?raw=true)
+
+
 他组：
+
+![他组](https://github.com/TeFur0/S-AES/blob/main/png/他组.png?raw=true)
+
 * **ASCII码加密**
 
 考虑到向实用性扩展，加密算法的数据输入可以是ASII编码字符串(分组为2 Bytes)，对应地输出也可以是ACII字符串(很可能是乱码)。
 
+![ASCII](https://github.com/TeFur0/S-AES/blob/main/png/ASCII.png?raw=true)
+
 * **双重加密**
 
 将S-AES算法通过双重加密进行扩展，分组长度仍然是16 bits，但密钥长度为32 bits。
+
+![双重加密](https://github.com/TeFur0/S-AES/blob/main/png/双重加密.png?raw=true)
 
 * **中间相遇攻击**
 
@@ -59,9 +71,9 @@ s_aes.html
 
 * **三重加密**
 
-将S-AES算法通过三重加密进行扩展，下面两种模式选择一种完成：
-(1)按照32 bits密钥Key(K1+K2)的模式进行三重加密解密，
-(2)使用48bits(K1+K2+K3)的模式进行三重加解密。
+将S-AES算法通过三重加密进行扩展：
+
+![三重加密](https://github.com/TeFur0/S-AES/blob/main/png/三重加密.png?raw=true)
 
 * **工作模式**
 
