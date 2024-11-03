@@ -29,15 +29,15 @@ s_aes.html
 
 ## **功能测试与运行界面**
 
-* **基础界面**
+* **基本界面**
 
-![基础界面](https://github.com/TeFur0/S-AES/blob/main/png/基础界面.png?raw=true)
+![基本界面](https://github.com/TeFur0/S-AES/blob/main/png/基本界面.png?raw=true)
 
-* **基本测试**
+* **基础加密**
 
 根据S-AES算法编写和调试程序，提供GUI解密支持用户交互。输入可以是16bit的数据和16bit的密钥，输出是16bit的密文。
 
-![基本测试](https://github.com/TeFur0/S-AES/blob/main/png/基本测试.png?raw=true)
+![基础加密](https://github.com/TeFur0/S-AES/blob/main/png/基础加密.png?raw=true)
 
 * **交叉测试**
 
@@ -69,6 +69,8 @@ s_aes.html
 
 假设你找到了使用相同密钥的明、密文对(一个或多个)，请尝试使用中间相遇攻击的方法找到正确的密钥Key(K1+K2)。
 
+![中间相遇攻击](https://github.com/TeFur0/S-AES/blob/main/png/中间相遇攻击.png?raw=true)
+
 * **三重加密**
 
 将S-AES算法通过三重加密进行扩展：
@@ -79,3 +81,12 @@ s_aes.html
 
 基于S-AES算法，使用密码分组链(CBC)模式对较长的明文消息进行加密。注意初始向量(16 bits) 的生成，并需要加解密双方共享。
 在CBC模式下进行加密，并尝试对密文分组进行替换或修改，然后进行解密，请对比篡改密文前后的解密结果。
+![CBC-1](https://github.com/TeFur0/S-AES/blob/main/png/CBC-1.png?raw=true)
+
+
+![CBC-2.1](https://github.com/TeFur0/S-AES/blob/main/png/CBC-1.png?raw=true)
+
+对密文进行更改替换
+![CBC-2.2](https://github.com/TeFur0/S-AES/blob/main/png/CBC-1.png?raw=true)
+
+
