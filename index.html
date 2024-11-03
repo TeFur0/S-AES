@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>S-AES Encryption Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f5;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background-color: #4a90e2;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .tabs {
+            display: flex;
+            background-color: #333;
+        }
+        .tabs button {
+            background-color: inherit;
+            border: none;
+            outline: none;
+            padding: 14px 20px;
+            cursor: pointer;
+            color: white;
+            transition: background-color 0.3s;
+            flex: 1;
+            font-size: 16px;
+        }
+        .tabs button:hover {
+            background-color: #575757;
+        }
+        .tabs button.active {
+            background-color: #4a90e2;
+        }
+        .tab-content {
+            display: none;
+            padding: 20px;
+            background-color: white;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .section {
+            max-width: 600px;
+            margin: auto;
+        }
+        .section h2 {
+            text-align: center;
+            color: #4a90e2;
+        }
+        .input-group {
+            margin: 15px 0;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        .input-group textarea {
+            width: 100%;
+            height: 60px;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        .button-group {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .button-group button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 4px;
+        }
+        .button-group button:hover {
+            background-color: #357ab8;
+        }
+        .output-group {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e8e8e8;
+            border-radius: 4px;
+            word-wrap: break-word;
+        }
+        footer {
+            text-align: center;
+            padding: 10px;
+            background-color: #4a90e2;
+            color: white;
+            position: fixed;
+            width: 100%;
+            bottom: 0;
+        }
+        @media (max-width: 600px) {
+            .tabs button {
+                padding: 10px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>S-AES Encryption Tool</h1>
+</header>
+
+<div class="tabs">
+    <button class="tab-link active" onclick="openTab(event, 'Basic')">基础加密</button>
+    <button class="tab-link" onclick="openTab(event, 'ASCII')">ASCII码加密</button>
+    <button class="tab-link" onclick="openTab(event, 'Double')">双重加密</button>
+    <button class="tab-link" onclick="openTab(event, 'Triple')">三重加密</button>
+</div>
+
+<div id="Basic" class="tab-content active">
+    <div class="section">
+        <h2>S-AES</h2>
+        <div class="input-group">
+            <label for="basic-plaintext">明文 (16位 二进制数):</label>
+            <input type="text" id="basic-plaintext" placeholder="e.g., 0101010101010101">
+        </div>
+        <div class="input-group">
+            <label for="basic-key">密钥 (16位 二进制数):</label>
+            <input type="text" id="basic-key" placeholder="e.g., 0011001100110011">
+        </div>
+        <div class="button-group">
+            <button onclick="basicEncrypt()">加密</button>
+        </div>
+        <div class="output-group" id="basic-output">
+            <strong>密文:</strong> <span></span>
+        </div>
+    </div>
+</div>
+
+<div id="ASCII" class="tab-content">
+    <div class="section">
+        <h2>ASCII加密</h2>
+        <div class="input-group">
+            <label for="ascii-plaintext">明文 (ASCII码):</label>
+            <input type="text" id="ascii-plaintext" maxlength="2" placeholder="e.g., Hi">
+        </div>
+        <div class="input-group">
+            <label for="ascii-key">密钥 (16位 二进制数):</label>
+            <input type="text" id="ascii-key" placeholder="e.g., 0011001100110011">
+        </div>
+        <div class="button-group">
+            <button onclick="asciiEncrypt()">加密</button>
+        </div>
+        <div class="output-group" id="ascii-output">
+            <strong>密文:</strong> <span></span>
+        </div>
+    </div>
+</div>
+
+<div id="Double" class="tab-content">
+    <div class="section">
+        <h2>双重加密</h2>
+        <div class="input-group">
+            <label for="double-plaintext">明文 (16位 二进制数):</label>
+            <input type="text" id="double-plaintext" placeholder="e.g., 0101010101010101">
+        </div>
+        <div class="input-group">
+            <label for="double-key1">密钥1 (16位 二进制数):</label>
+            <input type="text" id="double-key1" placeholder="e.g., 0011001100110011">
+        </div>
+        <div class="input-group">
+            <label for="double-key2">密钥2 (16位 二进制数):</label>
+            <input type="text" id="double-key2" placeholder="e.g., 1100110011001100">
+        </div>
+        <div class="button-group">
+            <button onclick="doubleEncrypt()">加密</button>
+        </div>
+        <div class="output-group" id="double-output">
+            <strong>密文:</strong> <span></span>
+        </div>
+    </div>
+</div>
+
+<div id="Triple" class="tab-content">
+    <div class="section">
+        <h2>三重加密</h2>
+        <div class="input-group">
+            <label for="triple-plaintext">明文 (16位 二进制数):</label>
+            <input type="text" id="triple-plaintext" placeholder="e.g., 0101010101010101">
+        </div>
+        <div class="input-group">
+            <label for="triple-key1">密钥 1 (16位 二进制数):</label>
+            <input type="text" id="triple-key1" placeholder="e.g., 0011001100110011">
+        </div>
+        <div class="input-group">
+            <label for="triple-key2">密钥 2 (16位 二进制数):</label>
+            <input type="text" id="triple-key2" placeholder="e.g., 1100110011001100">
+        </div>
+        <div class="input-group">
+            <label for="triple-key3">密钥 3 (16位 二进制数):</label>
+            <input type="text" id="triple-key3" placeholder="e.g., 1010101010101010">
+        </div>
+        <div class="button-group">
+            <button onclick="tripleEncrypt()">加密</button>
+        </div>
+        <div class="output-group" id="triple-output">
+            <strong>密文:</strong> <span></span>
+        </div>
+    </div>
+</div>
+
+<footer>
+    &copy; 2024 S-AES
+</footer>
+
+<script>
+    // Tab functionality
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].classList.remove("active");
+        }
+        tablinks = document.getElementsByClassName("tab-link");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].classList.remove("active");
+        }
+        document.getElementById(tabName).classList.add("active");
+        evt.currentTarget.classList.add("active");
+    }
+
+    // S-Box and Replace table
+    const sBox = [
+        [9, 4, 10, 11],
+        [13, 1, 8, 5],
+        [6, 2, 0, 3],
+        [12, 14, 15, 7]
+    ];
+
+    const Replace = [
+        [0,0,0,0],
+        [0,0,0,1],
+        [0,0,1,0],
+        [0,0,1,1],
+        [0,1,0,0],
+        [0,1,0,1],
+        [0,1,1,0],
+        [0,1,1,1],
+        [1,0,0,0],
+        [1,0,0,1],
+        [1,0,1,0],
+        [1,0,1,1],
+        [1,1,0,0],
+        [1,1,0,1],
+        [1,1,1,0],
+        [1,1,1,1]
+    ];
+
+    const rcon1 = [1,0,0,0,0,0,0,0];
+    const rcon2 = [0,0,1,1,0,0,0,0];
+
+    // Utility Functions
+    function OR_8(a, b) {
+        let result = [];
+        for (let i = 0; i < 8; i++) {
+            result.push(a[i] ^ b[i]);
+        }
+        return result;
+    }
+
+    function OR_4(a, b) {
+        let result = [];
+        for (let i = 0; i < 4; i++) {
+            result.push(a[i] ^ b[i]);
+        }
+        return result;
+    }
+
+    function SubBytes(temp) {
+        // temp is an array of 8 bits
+        let t1 = 2 * temp[0] + temp[1];
+        let t2 = 2 * temp[2] + temp[3];
+        let t3 = 2 * temp[4] + temp[5];
+        let t4 = 2 * temp[6] + temp[7];
+
+        let num1 = sBox[t1][t2];
+        let num2 = sBox[t3][t4];
+
+        for (let i = 0; i < 4; i++) {
+            temp[i] = Replace[num1][i];
+            temp[i+4] = Replace[num2][i];
+        }
+    }
+
+    function g(temp, rcon) {
+        // temp is an array of 8 bits
+        let t = temp.slice(); // copy
+        // Rotate left by 4 bits
+        for (let i = 0; i < 4; i++) {
+            let tt = t[i];
+            t[i] = t[i+4];
+            t[i+4] = tt;
+        }
+        // SubBytes on the rotated bits
+        SubBytes(t);
+        // XOR with rcon
+        return OR_8(t, rcon);
+    }
+
+    function AddRoundKey(mingwen, key) {
+        for (let i = 0; i < 2; i++) {
+            for (let j = 0; j < 8; j++) {
+                mingwen[i][j] ^= key[i][j];
+            }
+        }
+    }
+
+    function ShiftRows(temp) {
+        // Swap the right 4 bits of row 0 and row 1
+        for(let i = 4; i <8; i++) {
+            let t = temp[0][i];
+            temp[0][i] = temp[1][i];
+            temp[1][i] = t;
+        }
+    }
+
+    function x_fx(last, res) {
+        if (last[0] === 0) {
+            for (let i = 0; i < 3; i++) {
+                res[i] = last[i+1];
+            }
+            res[3] = 0;
+        } else {
+            res[1] = last[2];
+            res[2] = last[3] === 1 ? 0 : 1;
+            res[3] = 1;
+            res[0] = 0;
+        }
+    }
+
+    function multiply(a, b) {
+        // a and b are arrays of 4 bits
+        let result = [0,0,0,0];
+        // Compute a * x
+        let x1fx = [0,0,0,0];
+        x_fx(a, x1fx);
+        // Compute a * x^2
+        let x2fx = [0,0,0,0];
+        x_fx(x1fx, x2fx);
+        // Compute a * x^3
+        let x3fx = [0,0,0,0];
+        x_fx(x2fx, x3fx);
+
+        if (b[0] ===1 ) {
+            for(let i=0;i<4;i++) result[i] ^= x3fx[i];
+        }
+        if (b[1] ===1 ) {
+            for(let i=0;i<4;i++) result[i] ^= x2fx[i];
+        }
+        if (b[2] ===1 ) {
+            for(let i=0;i<4;i++) result[i] ^= x1fx[i];
+        }
+        if (b[3] ===1 ) {
+            for(let i=0;i<4;i++) result[i] ^= a[i];
+        }
+        return result;
+    }
+
+    function MixColumns(mingwen) {
+        const rule = [0,1,0,0];
+        let m00 = mingwen[0].slice(0,4);
+        let m10 = mingwen[0].slice(4,8);
+        let m01 = mingwen[1].slice(0,4);
+        let m11 = mingwen[1].slice(4,8);
+
+        let n00 = OR_4(m00, multiply(rule, m10));
+        let n10 = OR_4(multiply(rule, m00), m10);
+        let n01 = OR_4(m01, multiply(rule, m11));
+        let n11 = OR_4(multiply(rule, m01), m11);
+
+        for(let i=0;i<4;i++) {
+            mingwen[0][i] = n00[i];
+            mingwen[0][i+4] = n10[i];
+            mingwen[1][i] = n01[i];
+            mingwen[1][i+4] = n11[i];
+        }
+    }
+
+    // Key Expansion
+    function keyExpansion(key) {
+        // key is 2x8 array
+        let key1 = [[],[]];
+        let key2 = [[],[]];
+
+        let g_output1 = g(key[1], rcon1);
+        key1[0] = OR_8(key[0], g_output1);
+        key1[1] = OR_8(key1[0], key[1]);
+
+        let g_output2 = g(key1[1], rcon2);
+        key2[0] = OR_8(key1[0], g_output2);
+        key2[1] = OR_8(key2[0], key1[1]);
+
+        return [key1, key2];
+    }
+
+    // Encryption Process
+    function encrypt(plaintext, key) {
+        // plaintext and key are arrays of 16 bits
+        // Convert to 2x8 arrays
+        let pt = [plaintext.slice(0,8), plaintext.slice(8,16)];
+        let ky = [key.slice(0,8), key.slice(8,16)];
+
+        // Key Expansion
+        let keys = keyExpansion(ky);
+        let key1 = keys[0];
+        let key2 = keys[1];
+
+        // Round 0: AddRoundKey
+        AddRoundKey(pt, ky);
+
+        // Round 1
+        SubBytes(pt[0]);
+        SubBytes(pt[1]);
+        ShiftRows(pt);
+        MixColumns(pt);
+        AddRoundKey(pt, key1);
+
+        // Round 2
+        SubBytes(pt[0]);
+        SubBytes(pt[1]);
+        ShiftRows(pt);
+        AddRoundKey(pt, key2);
+
+        // Combine ciphertext
+        return pt[0].concat(pt[1]);
+    }
+
+    // Convert ASCII to binary
+    function asciiToBinary(str) {
+        if(str.length !==2){
+            alert("Please enter exactly 2 ASCII characters.");
+            return null;
+        }
+        let binaryStr = '';
+        for(let i=0;i<2;i++) {
+            let bin = str.charCodeAt(i).toString(2);
+            bin = bin.padStart(8, '0');
+            binaryStr += bin;
+        }
+        let binaryArray = binaryStr.split('').map(bit => parseInt(bit));
+        return binaryArray;
+    }
+
+    // Convert binary to ASCII
+    function binaryToASCII(binArray) {
+        if(binArray.length !==16){
+            return '';
+        }
+        let char1 = String.fromCharCode(parseInt(binArray.slice(0,8).join(''), 2));
+        let char2 = String.fromCharCode(parseInt(binArray.slice(8,16).join(''), 2));
+        return char1 + char2;
+    }
+
+    // Basic Encryption
+    function basicEncrypt() {
+        let plaintextStr = document.getElementById('basic-plaintext').value.trim();
+        let keyStr = document.getElementById('basic-key').value.trim();
+
+        if(plaintextStr.length !==16 || !/^[01]+$/.test(plaintextStr)){
+            alert("Plaintext must be a 16-bit binary string.");
+            return;
+        }
+        if(keyStr.length !==16 || !/^[01]+$/.test(keyStr)){
+            alert("Key must be a 16-bit binary string.");
+            return;
+        }
+
+        let plaintext = plaintextStr.split('').map(bit => parseInt(bit));
+        let key = keyStr.split('').map(bit => parseInt(bit));
+
+        let ciphertext = encrypt(plaintext, key);
+        let ciphertextStr = ciphertext.join('');
+        document.getElementById('basic-output').innerHTML = `<strong>密文:</strong> ${ciphertextStr}`;
+    }
+
+    // ASCII Encryption
+    function asciiEncrypt() {
+        let plaintextStr = document.getElementById('ascii-plaintext').value;
+        let keyStr = document.getElementById('ascii-key').value.trim();
+
+        if(keyStr.length !==16 || !/^[01]+$/.test(keyStr)){
+            alert("Key must be a 16-bit binary string.");
+            return;
+        }
+
+        let plaintext = asciiToBinary(plaintextStr);
+        if(!plaintext) return;
+
+        let key = keyStr.split('').map(bit => parseInt(bit));
+
+        let ciphertext = encrypt(plaintext, key);
+        let ciphertextStr = binaryToASCII(ciphertext);
+        document.getElementById('ascii-output').innerHTML = `<strong>密文:</strong> ${ciphertextStr}`;
+    }
+
+    // Double Encryption
+    function doubleEncrypt() {
+        let plaintextStr = document.getElementById('double-plaintext').value.trim();
+        let key1Str = document.getElementById('double-key1').value.trim();
+        let key2Str = document.getElementById('double-key2').value.trim();
+
+        if(plaintextStr.length !==16 || !/^[01]+$/.test(plaintextStr)){
+            alert("Plaintext must be a 16-bit binary string.");
+            return;
+        }
+        if(key1Str.length !==16 || !/^[01]+$/.test(key1Str)){
+            alert("Key 1 must be a 16-bit binary string.");
+            return;
+        }
+        if(key2Str.length !==16 || !/^[01]+$/.test(key2Str)){
+            alert("Key 2 must be a 16-bit binary string.");
+            return;
+        }
+
+        let plaintext = plaintextStr.split('').map(bit => parseInt(bit));
+        let key1 = key1Str.split('').map(bit => parseInt(bit));
+        let key2 = key2Str.split('').map(bit => parseInt(bit));
+
+        // First Encryption
+        let firstCipher = encrypt(plaintext, key1);
+        // Second Encryption
+        let finalCipher = encrypt(firstCipher, key2);
+
+        let ciphertextStr = finalCipher.join('');
+        document.getElementById('double-output').innerHTML = `<strong>密文:</strong> ${ciphertextStr}`;
+    }
+
+    // Triple Encryption
+    function tripleEncrypt() {
+        let plaintextStr = document.getElementById('triple-plaintext').value.trim();
+        let key1Str = document.getElementById('triple-key1').value.trim();
+        let key2Str = document.getElementById('triple-key2').value.trim();
+        let key3Str = document.getElementById('triple-key3').value.trim();
+
+        if(plaintextStr.length !==16 || !/^[01]+$/.test(plaintextStr)){
+            alert("Plaintext must be a 16-bit binary string.");
+            return;
+        }
+        if(key1Str.length !==16 || !/^[01]+$/.test(key1Str)){
+            alert("Key 1 must be a 16-bit binary string.");
+            return;
+        }
+        if(key2Str.length !==16 || !/^[01]+$/.test(key2Str)){
+            alert("Key 2 must be a 16-bit binary string.");
+            return;
+        }
+        if(key3Str.length !==16 || !/^[01]+$/.test(key3Str)){
+            alert("Key 3 must be a 16-bit binary string.");
+            return;
+        }
+
+        let plaintext = plaintextStr.split('').map(bit => parseInt(bit));
+        let key1 = key1Str.split('').map(bit => parseInt(bit));
+        let key2 = key2Str.split('').map(bit => parseInt(bit));
+        let key3 = key3Str.split('').map(bit => parseInt(bit));
+
+        // First Encryption
+        let firstCipher = encrypt(plaintext, key1);
+        // Second Encryption
+        let secondCipher = encrypt(firstCipher, key2);
+        // Third Encryption
+        let finalCipher = encrypt(secondCipher, key3);
+
+        let ciphertextStr = finalCipher.join('');
+        document.getElementById('triple-output').innerHTML = `<strong>密文:</strong> ${ciphertextStr}`;
+    }
+</script>
+
+</body>
+</html>

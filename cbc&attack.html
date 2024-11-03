@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>CBC 加密工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            text-align: center;
+            color: #333;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+        }
+        input[type="text"], input[type="password"], textarea, select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 12px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        textarea {
+            resize: vertical;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #4285f4;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #357ae8;
+        }
+        .output {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            word-wrap: break-word;
+        }
+        .error {
+            color: red;
+        }
+        .info {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CBC 加密工具</h1>
+        
+        <div class="section">
+            <label for="plaintext">明文：</label>
+            <textarea id="plaintext" rows="4" placeholder="输入要加密的明文（16位二进制）"></textarea>
+        </div>
+        
+        <div class="section">
+            <label for="key">密钥（16位二进制）：</label>
+            <input type="text" id="key" maxlength="16" placeholder="例如：1010101010101010">
+        </div>
+        
+        <div class="section">
+            <label for="mode">加密模式：</label>
+            <select id="mode">
+                <option value="ECB">ECB</option>
+                <option value="CBC">CBC</option>
+            </select>
+        </div>
+        
+        <div class="section" id="iv-section" style="display: none;">
+            <label for="iv">初始向量 (IV)（16位二进制）：</label>
+            <input type="text" id="iv" maxlength="16" placeholder="例如：0000111100001111">
+        </div>
+        
+        <div class="section">
+            <button onclick="encryptText()">加密</button>
+            <button onclick="decryptText()">解密</button>
+        </div>
+        
+        <div class="section">
+            <label for="output">输出：</label>
+            <div id="output" class="output"></div>
+        </div>
+        
+        <hr>
+        
+        <h2>中间相遇攻击（双重加密）</h2>
+        <div class="section">
+            <label for="attack-plaintext1">输入明文1（16位二进制）：</label>
+            <input type="text" id="attack-plaintext1" maxlength="16" placeholder="例如：1010101010101010">
+        </div>
+        <div class="section">
+            <label for="attack-ciphertext1">输入密文1（16位二进制）：</label>
+            <input type="text" id="attack-ciphertext1" maxlength="16" placeholder="例如：1111000011110000">
+        </div>
+        <div class="section">
+            <label for="attack-plaintext2">输入明文2（16位二进制）：</label>
+            <input type="text" id="attack-plaintext2" maxlength="16" placeholder="例如：0101010101010101">
+        </div>
+        <div class="section">
+            <label for="attack-ciphertext2">输入密文2（16位二进制）：</label>
+            <input type="text" id="attack-ciphertext2" maxlength="16" placeholder="例如：0000111100001111">
+        </div>
+        <div class="section">
+            <button onclick="middleAttack()">执行中间相遇攻击</button>
+        </div>
+        <div class="section">
+            <div id="attack-output" class="output"></div>
+        </div>
+    </div>
+    
+    <script>
+        // S-BOX和逆S-BOX
+        const S_BOX = [0x9, 0x4, 0xA, 0xB, 0xD, 0x1, 0x8, 0x5, 0x6, 0x2, 0x0, 0x3, 0xC, 0xE, 0xF, 0x7];
+        const InvS_BOX = [0xA, 0x5, 0x9, 0xB, 0x1, 0x7, 0x8, 0xF, 0x6, 0x0, 0x2, 0x3, 0xC, 0x4, 0xD, 0xE];
+        const Cfs_BOX = [0x1, 0x4, 0x4, 0x1];
+        const InvCfs_BOX = [0x9, 0x2, 0x2, 0x9];
+        const Polynomial = 0b10011;
+        const RCON_1 = 0b10000000;
+        const RCON_2 = 0b00110000;
+
+        // 工具函数
+        function binStrToInt(binStr) {
+            return parseInt(binStr, 2);
+        }
+
+        function intToBinStr(value, bits=16) {
+            return value.toString(2).padStart(bits, '0');
+        }
+
+        function keyPlus(input, key) {
+            const inputInt = binStrToInt(input);
+            const keyInt = binStrToInt(key);
+            const result = inputInt ^ keyInt;
+            return intToBinStr(result);
+        }
+
+        function substituteHalfBytes(input, box) {
+            const inputInt = binStrToInt(input);
+            let substitutedValue = 0;
+            for (let i = 0; i < 4; i++) {
+                let halfByte = (inputInt >> (i * 4)) & 0xF;
+                let substitutedHalfByte = box[halfByte];
+                substitutedValue |= (substitutedHalfByte << (i * 4));
+            }
+            return intToBinStr(substitutedValue);
+        }
+
+        function rowShift(input) {
+            const inputInt = binStrToInt(input);
+            let halfByte = [];
+            for (let i = 0; i < 4; i++) {
+                halfByte[i] = (inputInt >> (i * 4)) & 0xF;
+            }
+            const rowValue = (halfByte[3] << 12) | (halfByte[0] << 8) | (halfByte[1] << 4) | halfByte[2];
+            return intToBinStr(rowValue);
+        }
+
+        function GF_addition(a, b) {
+            return a ^ b;
+        }
+
+        function GF_multiplication(a, b) {
+            let result = 0;
+            for (let i = 0; i < 4; i++) {
+                if ((b & (1 << i)) !== 0) {
+                    result ^= (a << i);
+                }
+            }
+            for (let i = 7; i > 3; i--) {
+                if ((result & (1 << i)) !== 0) {
+                    result ^= (Polynomial << (i - 4));
+                }
+            }
+            return result & 0xF;
+        }
+
+        function colConfusion(input, box) {
+            const inputInt = binStrToInt(input);
+            let halfByte = [];
+            for (let i = 0; i < 4; i++) {
+                halfByte[i] = (inputInt >> (i * 4)) & 0xF;
+            }
+            const s11 = GF_addition(GF_multiplication(box[0], halfByte[3]), GF_multiplication(box[1], halfByte[2]));
+            const s21 = GF_addition(GF_multiplication(box[2], halfByte[3]), GF_multiplication(box[3], halfByte[2]));
+            const s12 = GF_addition(GF_multiplication(box[0], halfByte[1]), GF_multiplication(box[1], halfByte[0]));
+            const s22 = GF_addition(GF_multiplication(box[2], halfByte[1]), GF_multiplication(box[3], halfByte[0]));
+            const colValue = (s11 << 12) | (s21 << 8) | (s12 << 4) | s22;
+            return intToBinStr(colValue);
+        }
+
+        function keyExpansion(key) {
+            const keyInt = binStrToInt(key);
+            let halfByte = [];
+            for (let i = 0; i < 4; i++) {
+                halfByte[3 - i] = (keyInt >> (i * 4)) & 0xF;
+            }
+            const w0 = (halfByte[0] << 4) | halfByte[1];
+            const w1 = (halfByte[2] << 4) | halfByte[3];
+            const SubNib1 = (S_BOX[halfByte[3]] << 4) | S_BOX[halfByte[2]];
+            const w2 = w0 ^ RCON_1 ^ SubNib1;
+            const w3 = w1 ^ w2;
+            halfByte = [];
+            for (let i = 0; i < 2; i++) {
+                halfByte[1 - i] = (w3 >> (i * 4)) & 0xF;
+            }
+            const SubNib2 = (S_BOX[halfByte[1]] << 4) | S_BOX[halfByte[0]];
+            const w4 = w2 ^ RCON_2 ^ SubNib2;
+            const w5 = w3 ^ w4;
+
+            const keySchedule = [];
+            keySchedule.push(intToBinStr((w0 << 8) | w1));
+            keySchedule.push(intToBinStr((w2 << 8) | w3));
+            keySchedule.push(intToBinStr((w4 << 8) | w5));
+            return keySchedule;
+        }
+
+        function encrypt(input, key) {
+            const keyExpanded = keyExpansion(key);
+            let result = keyPlus(input, keyExpanded[0]);
+            result = substituteHalfBytes(result, S_BOX);
+            result = rowShift(result);
+            result = colConfusion(result, Cfs_BOX);
+            result = keyPlus(result, keyExpanded[1]);
+            result = substituteHalfBytes(result, S_BOX);
+            result = rowShift(result);
+            result = keyPlus(result, keyExpanded[2]);
+            return result;
+        }
+
+        function decrypt(input, key) {
+            const keyExpanded = keyExpansion(key);
+            let result = keyPlus(input, keyExpanded[2]);
+            result = rowShift(result);
+            result = substituteHalfBytes(result, InvS_BOX);
+            result = keyPlus(result, keyExpanded[1]);
+            result = colConfusion(result, InvCfs_BOX);
+            result = rowShift(result);
+            result = substituteHalfBytes(result, InvS_BOX);
+            result = keyPlus(result, keyExpanded[0]);
+            return result;
+        }
+
+        function preprocessInput(inputData, inputType) {
+            if (inputType === 'binary') {
+                if (!/^[01]+$/.test(inputData)) {
+                    throw new Error("输入必须是合法的二进制字符串。");
+                }
+                if (inputData.length % 16 !== 0) {
+                    throw new Error("二进制输入的长度必须是16的倍数。");
+                }
+                const blocks = [];
+                for (let i = 0; i < inputData.length; i += 16) {
+                    blocks.push(inputData.substr(i, 16));
+                }
+                return blocks;
+            } else if (inputType === 'ascii') {
+                if (inputData.length % 2 !== 0) {
+                    throw new Error("ASCII 输入必须是偶数个字符。");
+                }
+                for (let char of inputData) {
+                    if (char.charCodeAt(0) > 0xFF) {
+                        throw new Error("所有字符必须是合法的 ASCII 字符。");
+                    }
+                }
+                let binaryData = '';
+                for (let char of inputData) {
+                    binaryData += char.charCodeAt(0).toString(2).padStart(8, '0');
+                }
+                const blocks = [];
+                for (let i = 0; i < binaryData.length; i += 16) {
+                    blocks.push(binaryData.substr(i, 16));
+                }
+                return blocks;
+            } else if (inputType === 'unicode') {
+                const blocks = [];
+                for (let char of inputData) {
+                    blocks.push(char.charCodeAt(0).toString(2).padStart(16, '0'));
+                }
+                return blocks;
+            } else {
+                throw new Error("不支持的输入类型。");
+            }
+        }
+
+        function binaryToAscii(binaryStr) {
+            if (binaryStr.length % 8 !== 0) {
+                throw new Error("二进制字符串的长度必须是8的倍数。");
+            }
+            let asciiOutput = '';
+            for (let i = 0; i < binaryStr.length; i += 8) {
+                asciiOutput += String.fromCharCode(parseInt(binaryStr.substr(i, 8), 2));
+            }
+            return asciiOutput;
+        }
+
+        function binaryToUnicode(binaryStr) {
+            if (binaryStr.length % 16 !== 0) {
+                throw new Error("二进制字符串的长度必须是16的倍数。");
+            }
+            let unicodeOutput = '';
+            for (let i = 0; i < binaryStr.length; i += 16) {
+                unicodeOutput += String.fromCharCode(parseInt(binaryStr.substr(i, 16), 2));
+            }
+            return unicodeOutput;
+        }
+
+        function encryptCBC(plaintext, key, iv, inputType) {
+            const blocks = preprocessInput(plaintext, inputType);
+            let ciphertext = [];
+            let previousBlock = binStrToInt(iv);
+            for (let block of blocks) {
+                let blockInt = binStrToInt(block);
+                let xorResult = blockInt ^ previousBlock;
+                let xorBin = intToBinStr(xorResult);
+                let encryptedBlock = encrypt(xorBin, key);
+                ciphertext.push(encryptedBlock);
+                previousBlock = binStrToInt(encryptedBlock);
+            }
+            if (inputType === 'binary') {
+                return ciphertext.join('');
+            } else if (inputType === 'ascii') {
+                let binaryStr = ciphertext.join('');
+                return binaryToAscii(binaryStr);
+            } else if (inputType === 'unicode') {
+                let binaryStr = ciphertext.join('');
+                return binaryToUnicode(binaryStr);
+            } else {
+                throw new Error("不支持的输入类型。");
+            }
+        }
+
+        function decryptCBC(ciphertext, key, iv, inputType) {
+            let blocks;
+            if (inputType === 'binary') {
+                if (ciphertext.length % 16 !== 0) {
+                    throw new Error("密文长度必须是16的倍数。");
+                }
+                blocks = [];
+                for (let i = 0; i < ciphertext.length; i += 16) {
+                    blocks.push(ciphertext.substr(i, 16));
+                }
+            } else if (inputType === 'ascii') {
+                let binaryData = '';
+                for (let char of ciphertext) {
+                    binaryData += char.charCodeAt(0).toString(2).padStart(8, '0');
+                }
+                if (binaryData.length % 16 !== 0) {
+                    throw new Error("密文二进制长度必须是16的倍数。");
+                }
+                blocks = [];
+                for (let i = 0; i < binaryData.length; i += 16) {
+                    blocks.push(binaryData.substr(i, 16));
+                }
+            } else if (inputType === 'unicode') {
+                let binaryData = '';
+                for (let char of ciphertext) {
+                    binaryData += char.charCodeAt(0).toString(2).padStart(16, '0');
+                }
+                if (binaryData.length % 16 !== 0) {
+                    throw new Error("密文二进制长度必须是16的倍数。");
+                }
+                blocks = [];
+                for (let i = 0; i < binaryData.length; i += 16) {
+                    blocks.push(binaryData.substr(i, 16));
+                }
+            } else {
+                throw new Error("不支持的输入类型。");
+            }
+
+            let plaintext = [];
+            let previousBlock = binStrToInt(iv);
+            for (let encryptedBlock of blocks) {
+                let decryptedBlock = decrypt(encryptedBlock, key);
+                let decryptedInt = binStrToInt(decryptedBlock) ^ previousBlock;
+                plaintext.push(intToBinStr(decryptedInt));
+                previousBlock = binStrToInt(encryptedBlock);
+            }
+
+            if (inputType === 'binary') {
+                return plaintext.join('');
+            } else if (inputType === 'ascii') {
+                let binaryStr = plaintext.join('');
+                return binaryToAscii(binaryStr);
+            } else if (inputType === 'unicode') {
+                let binaryStr = plaintext.join('');
+                return binaryToUnicode(binaryStr);
+            } else {
+                throw new Error("不支持的输入类型。");
+            }
+        }
+
+        // 加密函数
+        function encryptText() {
+            const plaintext = document.getElementById('plaintext').value.trim();
+            const key = document.getElementById('key').value.trim();
+            const mode = document.getElementById('mode').value;
+            const iv = document.getElementById('iv').value.trim();
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = '';
+
+            // 简单假设输入类型为二进制
+            const inputType = 'binary';
+
+            try {
+                if (!/^[01]{16}$/.test(key)) {
+                    throw new Error("密钥必须是16位二进制。");
+                }
+
+                if (mode === 'CBC') {
+                    if (!/^[01]{16}$/.test(iv)) {
+                        throw new Error("初始向量 IV 必须是16位二进制。");
+                    }
+                    if (plaintext.length === 0 || plaintext.length % 16 !== 0) {
+                        throw new Error("明文长度必须是16的倍数。");
+                    }
+                    const ciphertext = encryptCBC(plaintext, key, iv, inputType);
+                    outputDiv.innerHTML = `密文：${ciphertext}`;
+                } else {
+                    // ECB模式
+                    if (plaintext.length === 0 || plaintext.length % 16 !== 0) {
+                        throw new Error("明文长度必须是16的倍数。");
+                    }
+                    let blocks = preprocessInput(plaintext, inputType);
+                    let ciphertext = blocks.map(block => encrypt(block, key)).join('');
+                    outputDiv.innerHTML = `密文：${ciphertext}`;
+                }
+            } catch (error) {
+                outputDiv.innerHTML = `<span class="error">${error.message}</span>`;
+            }
+        }
+
+        // 解密函数
+        function decryptText() {
+            const ciphertext = document.getElementById('plaintext').value.trim();
+            const key = document.getElementById('key').value.trim();
+            const mode = document.getElementById('mode').value;
+            const iv = document.getElementById('iv').value.trim();
+            const outputDiv = document.getElementById('output');
+            outputDiv.innerHTML = '';
+
+            // 简单假设输入类型为二进制
+            const inputType = 'binary';
+
+            try {
+                if (!/^[01]{16}$/.test(key)) {
+                    throw new Error("密钥必须是16位二进制。");
+                }
+
+                if (mode === 'CBC') {
+                    if (!/^[01]{16}$/.test(iv)) {
+                        throw new Error("初始向量 IV 必须是16位二进制。");
+                    }
+                    if (ciphertext.length === 0 || ciphertext.length % 16 !== 0) {
+                        throw new Error("密文长度必须是16的倍数。");
+                    }
+                    const plaintext = decryptCBC(ciphertext, key, iv, inputType);
+                    outputDiv.innerHTML = `明文：${plaintext}`;
+                } else {
+                    // ECB模式
+                    if (ciphertext.length === 0 || ciphertext.length % 16 !== 0) {
+                        throw new Error("密文长度必须是16的倍数。");
+                    }
+                    let blocks = preprocessInput(ciphertext, inputType);
+                    let plaintext = blocks.map(block => decrypt(block, key)).join('');
+                    outputDiv.innerHTML = `明文：${plaintext}`;
+                }
+            } catch (error) {
+                outputDiv.innerHTML = `<span class="error">${error.message}</span>`;
+            }
+        }
+
+        // 显示或隐藏IV输入框
+        document.getElementById('mode').addEventListener('change', function() {
+            const mode = this.value;
+            const ivSection = document.getElementById('iv-section');
+            if (mode === 'CBC') {
+                ivSection.style.display = 'block';
+            } else {
+                ivSection.style.display = 'none';
+            }
+        });
+
+        // 中间相遇攻击函数（针对双重加密）
+        function middleAttack() {
+            const P1 = document.getElementById('attack-plaintext1').value.trim();
+            const C1 = document.getElementById('attack-ciphertext1').value.trim();
+            const P2 = document.getElementById('attack-plaintext2').value.trim();
+            const C2 = document.getElementById('attack-ciphertext2').value.trim();
+            const attackOutputDiv = document.getElementById('attack-output');
+            attackOutputDiv.innerHTML = '';
+
+            // 输入类型假设为二进制
+            const inputType = 'binary';
+
+            try {
+                // 验证输入格式
+                const binaryRegex = /^[01]{16}$/;
+                if (!binaryRegex.test(P1)) {
+                    throw new Error("输入明文1必须是16位二进制。");
+                }
+                if (!binaryRegex.test(C1)) {
+                    throw new Error("输入密文1必须是16位二进制。");
+                }
+                if (!binaryRegex.test(P2)) {
+                    throw new Error("输入明文2必须是16位二进制。");
+                }
+                if (!binaryRegex.test(C2)) {
+                    throw new Error("输入密文2必须是16位二进制。");
+                }
+
+                // 双重加密：C = E(K2, E(K1, P))
+                // 目标：找到 K1 和 K2，使得：
+                // C1 = E(K2, E(K1, P1))
+                // C2 = E(K2, E(K1, P2))
+
+                // 中间相遇攻击步骤：
+                // 1. 遍历所有可能的 K1，计算 E(K1, P1) 和 E(K1, P2)，存储中间结果。
+                // 2. 遍历所有可能的 K2，计算 D(K2, C1) 和 D(K2, C2)，检查是否有匹配的中间结果。
+                // 3. 如果 E(K1, P1) = D(K2, C1) 且 E(K1, P2) = D(K2, C2)，则找到有效的 K1 和 K2。
+
+                const startTime = performance.now();
+
+                // 第一阶段：构建 K1 -> (E(K1, P1), E(K1, P2)) 的映射
+                let K1Map = {};
+                for (let K1 = 0; K1 <= 0xFFFF; K1++) {
+                    let K1Str = K1.toString(2).padStart(16, '0');
+                    let E_P1 = encrypt(P1, K1Str);
+                    let E_P2 = encrypt(P2, K1Str);
+                    K1Map[K1Str] = { E_P1, E_P2 };
+                }
+
+                // 第二阶段：遍历所有可能的 K2，计算 D(K2, C1) 和 D(K2, C2)，并寻找匹配的 K1
+                let foundKeys = [];
+
+                for (let K2 = 0; K2 <= 0xFFFF; K2++) {
+                    let K2Str = K2.toString(2).padStart(16, '0');
+                    let D_C1 = decrypt(C1, K2Str);
+                    let D_C2 = decrypt(C2, K2Str);
+
+                    // 遍历所有 K1，检查是否存在 K1 使得 E(K1, P1) = D_C1 且 E(K1, P2) = D_C2
+                    for (let [K1Str, intermediates] of Object.entries(K1Map)) {
+                        if (intermediates.E_P1 === D_C1 && intermediates.E_P2 === D_C2) {
+                            foundKeys.push({ K1: K1Str, K2: K2Str });
+                        }
+                    }
+                }
+
+                const endTime = performance.now();
+                const elapsedTime = ((endTime - startTime) / 1000).toFixed(6);
+
+                // 处理结果
+                if (foundKeys.length > 0) {
+                    let uniqueKeys = [];
+                    // 去除重复的 K1 和 K2 组合
+                    foundKeys.forEach(pair => {
+                        // 确保每组 K1 和 K2 唯一
+                        if (!uniqueKeys.some(existing => existing.K1 === pair.K1 && existing.K2 === pair.K2)) {
+                            uniqueKeys.push(pair);
+                        }
+                    });
+
+                    let resultHTML = `找到 ${uniqueKeys.length} 组匹配的密钥对:<br>`;
+                    uniqueKeys.forEach((pair, index) => {
+                        resultHTML += `组 ${index + 1}: K1 = ${pair.K1}, K2 = ${pair.K2}<br>`;
+                    });
+                    resultHTML += `算法执行时间: ${elapsedTime} 秒`;
+                    attackOutputDiv.innerHTML = `<span class="info">${resultHTML}</span>`;
+                } else {
+                    attackOutputDiv.innerHTML = `<span class="error">未找到匹配的密钥对</span>`;
+                }
+
+            } catch (error) {
+                attackOutputDiv.innerHTML = `<span class="error">${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>
