@@ -57,7 +57,7 @@ s_aes.html
 
 考虑到向实用性扩展，加密算法的数据输入可以是ASII编码字符串(分组为2 Bytes)，对应地输出也可以是ACII字符串(很可能是乱码)。
 
-![ASCII](https://github.com/TeFur0/S-AES/blob/main/png/ASCII.png?raw=true)
+![ASCII加密](https://github.com/TeFur0/S-AES/blob/main/png/ASCII加密.png?raw=true)
 
 * **双重加密**
 
@@ -85,6 +85,7 @@ s_aes.html
 
 
 ![CBC-2.1](https://github.com/TeFur0/S-AES/blob/main/png/CBC-1.png?raw=true)
+
 
 对密文进行更改替换
 ![CBC-2.2](https://github.com/TeFur0/S-AES/blob/main/png/CBC-1.png?raw=true)
